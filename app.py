@@ -1,29 +1,21 @@
 
+import os
 from flask import Flask, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import uuid
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'chinchilla_secret_key'
+# お絵描きプログラムと同様の超高速でシンプルなSocket.IO設定
+socketio = SocketIO(app, cors_allowed_origins="*")
 
-socketio = SocketIO(
-    app, 
-    cors_allowed_origins="*", 
-    async_mode='eventlet',
-    ping_timeout=60,
-    ping_interval=25,
-    logger=False,
-    engineio_logger=False
-)
-
-players = {}  # sid: {name, xp, match_id}
+players = {}  # sid: {name, xp, room, match_id}
 waiting_queue = []
 
 @app.route('/')
 def index():
     return "Chinchilla Samurai Online Server is Running."
 
-@app.register_player if False else socketio.on('register_player')
+@socketio.on('register_player')
 def handle_register(data):
     players[request.sid] = {
         'id': request.sid,
@@ -84,5 +76,11 @@ def handle_random_match(data):
         socketio.emit('start_online_battle', {'match_id': match_id, 'opponent_name': players[p1]['name']}, room=p2)
         broadcast_player_list()
 
+@socketio.on('player_action')
+def handle_player_action(data):
+    match_id = data.get('match_id')
+    emit('opponent_action', data, room=match_id, include_self=False)
+
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    socketio.run(app, host='0.0.0.0', port=port)
